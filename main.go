@@ -18,7 +18,8 @@ type NginxResponse struct {
 		Dropped  int64 `json:"dropped"`
 		Idle     int64 `json:"idle"`
 	} `json:"connections"`
-	Upstreams map[string][]Backend `json:"upstreams"`
+	Upstreams   map[string][]Backend   `json:"upstreams"`
+	ServerZones map[string]interface{} `json:"server_zones"`
 }
 
 type Backend struct {
@@ -49,41 +50,84 @@ func NginxStatus() (*NginxResponse, error) {
 	return &er, nil
 }
 
+func SendStatsD(gs string, gt string, gv int64) {
+
+	// connect to statsd
+	var sd string = "127.0.0.1:8125"
+	var gk string = "nginx"
+
+	client, err := statsd.NewClient(sd, gk)
+	if err != nil {
+		log.Println(err)
+	}
+	defer client.Close()
+
+	// send metrics to statsd
+	var fi float32 = 10.0
+	var mt string = "status.demo_nginx_com"
+
+	client.Inc(mt+"."+gs+"."+gt, gv, fi)
+}
+
 func main() {
 
 	for {
+
+		// grab nginx plus status json (delayed)
 		nt, err := NginxStatus()
 		if err != nil {
 			log.Println(err)
 		}
 
+		// sleep x seconds - time.Millisecond * 1000 = 1sec
 		time.Sleep(time.Millisecond * 1000)
 
+		// grab nginx plus status json
 		nr, err := NginxStatus()
 		if err != nil {
 			log.Println(err)
 		}
 
-		client, err := statsd.NewClient("127.0.0.1:8125", "nginx")
-		if err != nil {
-			log.Println(err)
+		// send nginx plus connection metrics
+		SendStatsD("connections", "accepted", nr.Connections.Accepted-nt.Connections.Accepted)
+		SendStatsD("connections", "dropped", nr.Connections.Dropped-nt.Connections.Dropped)
+		SendStatsD("connections", "active", nr.Connections.Active)
+		SendStatsD("connections", "idle", nr.Connections.Idle)
+
+		// testing loop of server zones
+		for _, zone := range nr.ServerZones {
+
+			m := zone.(map[string]interface{})
+			fmt.Println(m)
+			for k, v := range m {
+				switch vv := v.(type) {
+				case string:
+					fmt.Println(k, "is string", vv)
+				case int:
+					fmt.Println(k, "is int", vv)
+				case []interface{}:
+					fmt.Println(k, "is an array:")
+					for i, u := range vv {
+						fmt.Println(i, u)
+					}
+				default:
+					fmt.Println(k, "is of a type I don't know how to handle")
+				}
+			}
+
 		}
 
-		var interval float32 = 1.0
-
-		client.Inc("status.demo.connections.accepted", nr.Connections.Accepted-nt.Connections.Accepted, interval)
-		client.Inc("status.demo.connections.dropped", nr.Connections.Dropped-nt.Connections.Dropped, interval)
-		client.Inc("status.demo.connections.active", nr.Connections.Active, interval)
-		client.Inc("status.demo.connections.idle", nr.Connections.Idle, interval)
-
+		// loop through upstream
 		for _, backend := range nr.Upstreams {
+
+			fmt.Println(backend)
+
 			for _, server := range backend {
+
 				fmt.Println(server.Server)
+
 			}
 		}
-
-		// explicit close statsd connections
-		client.Close()
 
 	}
 }
