@@ -82,7 +82,9 @@ func main() {
 		}
 
 		for _, backend := range nr.Upstreams {
-			fmt.Println(backend)
+			for _, server := range backend {
+				fmt.Println(server.Server, "\n")
+			}
 		}
 
 		//for _, backend := range nr.NginxResponse.Backend {
