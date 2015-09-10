@@ -4,23 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	//"io"
+	"github.com/cactus/go-statsd-client/statsd"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
 )
 
-type StatusJSON struct {
-	Connections struct {
-		Accepted int `json:"accepted"`
-		Active   int `json:"active"`
-		Dropped  int `json:"dropped"`
-		Idle     int `json:"idle"`
-	} `json:"connections"`
-}
-
 type NginxResponse struct {
+	Connections struct {
+		Accepted int64 `json:"accepted"`
+		Active   int64 `json:"active"`
+		Dropped  int64 `json:"dropped"`
+		Idle     int64 `json:"idle"`
+	} `json:"connections"`
 	Upstreams map[string][]Backend `json:"upstreams"`
 }
 
@@ -54,51 +51,39 @@ func NginxStatus() (*NginxResponse, error) {
 
 func main() {
 
-	//	// define the status api url
-	//	var status_json string = "http://demo.nginx.com/status"
-	//
-	//	// request the json from the api using net/http
-	//	x, err := http.Get(status_json)
-	//
-	//	if err != nil {
-	//		log.Fatalf("ERROR: %s", err)
-	//	}
-	//
-	//	x_dec := json.NewDecoder(x.Body)
-	//
-	//	var x_data StatusJSON
-	//	if err := x_dec.Decode(&x_data); err == io.EOF {
-	//		//break
-	//	} else if err != nil {
-	//		log.Fatal("ERROR: %s", err)
-	//	}
-
 	for {
+		nt, err := NginxStatus()
+		if err != nil {
+			log.Println(err)
+		}
+
+		time.Sleep(time.Millisecond * 1000)
 
 		nr, err := NginxStatus()
 		if err != nil {
 			log.Println(err)
-			time.Sleep(time.Duration(2 * time.Second))
 		}
+
+		client, err := statsd.NewClient("127.0.0.1:8125", "nginx")
+		if err != nil {
+			log.Println(err)
+		}
+
+		var interval float32 = 1.0
+
+		client.Inc("status.demo.connections.accepted", nr.Connections.Accepted-nt.Connections.Accepted, interval)
+		client.Inc("status.demo.connections.dropped", nr.Connections.Dropped-nt.Connections.Dropped, interval)
+		client.Inc("status.demo.connections.active", nr.Connections.Active, interval)
+		client.Inc("status.demo.connections.idle", nr.Connections.Idle, interval)
 
 		for _, backend := range nr.Upstreams {
 			for _, server := range backend {
-				fmt.Println(server.Server, "\n")
+				fmt.Println(server.Server)
 			}
 		}
 
-		//for _, backend := range nr.NginxResponse.Backend {
-		//	fmt.Println(backend)
-		//}
-
-		//		// print some metrics
-		//		fmt.Println("NGINX Plus Metric\t", "Value")
-		//		fmt.Println("Connections Accepted:\t", x_data.Connections.Accepted)
-		//		fmt.Println("Connections Active:\t", x_data.Connections.Active)
-		//		fmt.Println("Connections Dropped:\t", x_data.Connections.Dropped)
-		//		fmt.Println("Connections Accepted:\t", x_data.Connections.Idle)
-		//
-		// loop through the zones or upstream
+		// explicit close statsd connections
+		client.Close()
 
 	}
 }
