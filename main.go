@@ -89,7 +89,7 @@ func main() {
 		}
 
 		// send nginx plus connection metrics
-		SendStatsD("connections", "accepted", nr.Connections.Accepted-nt.Connections.Accepted)
+		SendStatsD("connections", "accepted_", nr.Connections.Accepted-nt.Connections.Accepted)
 		SendStatsD("connections", "dropped", nr.Connections.Dropped-nt.Connections.Dropped)
 		SendStatsD("connections", "active", nr.Connections.Active)
 		SendStatsD("connections", "idle", nr.Connections.Idle)
@@ -97,24 +97,7 @@ func main() {
 		// testing loop of server zones
 		for _, zone := range nr.ServerZones {
 
-			m := zone.(map[string]interface{})
-			fmt.Println(m)
-			for k, v := range m {
-				switch vv := v.(type) {
-				case string:
-					fmt.Println(k, "is string", vv)
-				case int:
-					fmt.Println(k, "is int", vv)
-				case []interface{}:
-					fmt.Println(k, "is an array:")
-					for i, u := range vv {
-						fmt.Println(i, u)
-					}
-				default:
-					fmt.Println(k, "is of a type I don't know how to handle")
-				}
-			}
-
+			fmt.Println(zone)
 		}
 
 		// loop through upstream
